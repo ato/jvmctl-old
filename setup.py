@@ -10,7 +10,7 @@ config = {
     'download_url': 'https://github.com/ato/jvmctl/tarball/master',
     'author_email': 'ato@meshy.org',
     'version': '0.1.0',
-    'install_requires': ['nose'],
+    'install_requires': ['nose', 'configparser'],
     'packages': ['jvmctl'],
     'scripts': [],
     'name': 'jvmctl'
