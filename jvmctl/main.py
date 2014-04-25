@@ -1,7 +1,8 @@
-import os, sys, argparse, subprocess, shutil
+from __future__ import print_function
+import os, sys, argparse, subprocess, shutil, vcstools
 from jvmctl.systemd import Systemd
 
-systemd = Systemd()
+initd = Systemd()
 parser = argparse.ArgumentParser(description='Manage JVMs')
 subparsers = parser.add_subparsers(metavar="<subcommand>")
 
@@ -11,7 +12,7 @@ class Node(object):
 def node(args):
     node = Node()
     node.name = args.node
-    node.config_file = os.path.join('/etc/jvmctl', node.name + '.conf')
+    node.config_file = os.path.join('/etc/jvmctl/nodes/', node.name + '.conf')
     return node
 
 def command(func):
@@ -24,10 +25,27 @@ def command(func):
 # Code Management
 #
 
+def fail(msg):
+    raise Exception(msg)
+
 @command
 def deploy(args):
     "(re)build and deploy the application"
-    pass
+    build_root = '/tmp/build'
+    build_dest = '/tmp/build-dest'
+    os.mkdir(build_root)
+    os.mkdir(build_dest)
+    vcs_client = vcstools.get_vcs_client('git', build_root)
+    vcs_client.checkout('source-url', version='1.2.3') or fail('source checkout failed')
+    # TODO: build environment
+    # TODO: build user
+    if os.path.exists(os.path.join(build_root, 'nla-deploy.sh')):
+        subprocess.call(['bash', 'nla-deploy.sh', build_dest, 'bogus'], cwd=build_root)
+    elif os.path.exists(os.path.join(build_root, 'pom.xml')):
+        subprocess.call(['mvn', 'package'], cwd=build_root)
+    else:
+        print('jvmctl: No build script found (add a pom.xml or nla-deploy.sh)', file=sys.stderr)
+    
 
 #
 # Process Management
@@ -36,37 +54,37 @@ def deploy(args):
 @command
 def disable(args):
     "prevent the node from running on startup"
-    return systemd.disable(node(args))
+    return initd.disable(node(args))
 
 @command
 def enable(args):
     "allow the node to run on startup"
-    return systemd.enable(node(args))
+    return initd.enable(node(args))
 
 @command
 def pid(args):
     "print process ID of this node"
-    print systemd.pid(node(args))
+    print(initd.pid(node(args)))
 
 @command
 def restart(args):
     "stop and then start the node"
-    return systemd.restart(node(args))
+    return initd.restart(node(args))
 
 @command
 def start(args):
     "start the node"
-    return systemd.start(node(args))
+    return initd.start(node(args))
 
 @command
 def status(args):
     "check whether the node is running"
-    return systemd.status(node(args))
+    return initd.status(node(args))
 
 @command
 def stop(args):
     "temporarily stop the node"
-    return systemd.stop(node(args))
+    return initd.stop(node(args))
 
 #
 # Configuration
@@ -93,35 +111,6 @@ def show(args):
     "show node configuration"
     with open(node(args).config_file, 'r') as f:
         shutil.copyfileobj(f, sys.stdout)
-
-#Process management:
-#  deploy    - (re)build and reploy the application
-#  disable   - stop the node and prevent it from running on startup
-#  pid       - print process ID of this node
-#  restart   - stop and then start the jetty node
-#  start     - start the jetty node
-#  status    - check whether the jetty node is running
-#  stop      - temporarily stop the jetty node
-#
-#Configuration:
-#  config    - open $EDITOR on the node config file
-#  configlog - show configuration history
-#  delete    - delete the node
-#  list      - list all configured Jetty nodes
-#  modify    - automatically modify the node config based on arguments
-#  new       - create a new node config file
-#  register  - register a new node with the OS
-#  show      - show node config
-#
-#Debugging:
-#  gcutil    - show garbage collection status using jstat
-#  jdb       - force attach debugger (limited functionality)
-#  lsof      - list open files
-#  log       - follow the end of the jetty log with less
-#  sqltrace  - trace JDBC SQL statements
-#  stack     - print thread dump like Ctrl-\
-#  truncate  - truncate the current log file
-#  truss     - trace system calls
 
 def main():
     args = parser.parse_args()
